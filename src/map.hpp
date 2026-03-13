@@ -44,6 +44,8 @@ template<
 
    Node *root;
    Node *nil;  // sentinel node for end iterator
+   Node *minNode;  // cache for minimum node
+   Node *maxNode;  // cache for maximum node
    size_t count_size;
    Compare comp;
 
@@ -548,13 +550,15 @@ template<
    /**
   * two constructors
     */
-   map() : root(nullptr), count_size(0) {
+   map() : root(nullptr), minNode(nullptr), maxNode(nullptr), count_size(0) {
        nil = new Node();
    }
 
    map(const map &other) : root(nullptr), count_size(other.count_size) {
        nil = new Node();
        root = copyTree(other.root, nullptr);
+       minNode = minimum(root);
+       maxNode = maximum(root);
    }
 
    /**
@@ -565,6 +569,8 @@ template<
        clearTree(root);
        root = copyTree(other.root, nullptr);
        count_size = other.count_size;
+       minNode = minimum(root);
+       maxNode = maximum(root);
        return *this;
    }
 
@@ -619,11 +625,11 @@ template<
   * return a iterator to the beginning
     */
    iterator begin() {
-       return iterator(this, minimum(root));
+       return iterator(this, minNode);
    }
 
    const_iterator cbegin() const {
-       return const_iterator(this, minimum(root));
+       return const_iterator(this, minNode);
    }
 
    /**
@@ -659,6 +665,8 @@ template<
    void clear() {
        clearTree(root);
        root = nullptr;
+       minNode = nullptr;
+       maxNode = nullptr;
        count_size = 0;
    }
 
@@ -672,6 +680,7 @@ template<
        if (!root) {
            root = new Node(value);
            root->color = BLACK;
+           minNode = maxNode = root;
            count_size = 1;
            return pair<iterator, bool>(iterator(this, root), true);
        }
@@ -697,6 +706,14 @@ template<
            parent->right = newNode;
        }
 
+       // Update min/max cache
+       if (!minNode || comp(value.first, minNode->data->first)) {
+           minNode = newNode;
+       }
+       if (!maxNode || comp(maxNode->data->first, value.first)) {
+           maxNode = newNode;
+       }
+
        count_size++;
        insertFixup(newNode);
 
@@ -713,8 +730,53 @@ template<
            throw invalid_iterator();
        }
 
+       // Update min/max cache if necessary
+       bool updateMin = (pos.node == minNode);
+       bool updateMax = (pos.node == maxNode);
+
+       Node *nextMin = nullptr;
+       Node *nextMax = nullptr;
+
+       if (updateMin && count_size > 1) {
+           // Find successor of minNode
+           if (pos.node->right) {
+               nextMin = minimum(pos.node->right);
+           } else {
+               Node *p = pos.node->parent;
+               Node *curr = pos.node;
+               while (p && curr == p->right) {
+                   curr = p;
+                   p = p->parent;
+               }
+               nextMin = p;
+           }
+       }
+
+       if (updateMax && count_size > 1) {
+           // Find predecessor of maxNode
+           if (pos.node->left) {
+               nextMax = maximum(pos.node->left);
+           } else {
+               Node *p = pos.node->parent;
+               Node *curr = pos.node;
+               while (p && curr == p->left) {
+                   curr = p;
+                   p = p->parent;
+               }
+               nextMax = p;
+           }
+       }
+
        deleteNode(pos.node);
        count_size--;
+
+       // Update caches
+       if (count_size == 0) {
+           minNode = maxNode = nullptr;
+       } else {
+           if (updateMin) minNode = nextMin;
+           if (updateMax) maxNode = nextMax;
+       }
    }
 
    /**
