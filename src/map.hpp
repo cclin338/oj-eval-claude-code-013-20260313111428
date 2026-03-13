@@ -341,7 +341,7 @@ template<
        iterator operator--(int) {
            iterator tmp = *this;
            if (node == mp->nil) {
-               node = mp->maximum(mp->root);
+               node = mp->maxNode;
                if (!node) throw invalid_iterator();
            } else if (!node) {
                throw invalid_iterator();
@@ -366,7 +366,7 @@ template<
         */
        iterator &operator--() {
            if (node == mp->nil) {
-               node = mp->maximum(mp->root);
+               node = mp->maxNode;
                if (!node) throw invalid_iterator();
            } else if (!node) {
                throw invalid_iterator();
@@ -477,7 +477,7 @@ template<
        const_iterator operator--(int) {
            const_iterator tmp = *this;
            if (node == mp->nil) {
-               node = mp->maximum(mp->root);
+               node = mp->maxNode;
                if (!node) throw invalid_iterator();
            } else if (!node) {
                throw invalid_iterator();
@@ -499,7 +499,7 @@ template<
 
        const_iterator &operator--() {
            if (node == mp->nil) {
-               node = mp->maximum(mp->root);
+               node = mp->maxNode;
                if (!node) throw invalid_iterator();
            } else if (!node) {
                throw invalid_iterator();
@@ -734,48 +734,15 @@ template<
        bool updateMin = (pos.node == minNode);
        bool updateMax = (pos.node == maxNode);
 
-       Node *nextMin = nullptr;
-       Node *nextMax = nullptr;
-
-       if (updateMin && count_size > 1) {
-           // Find successor of minNode
-           if (pos.node->right) {
-               nextMin = minimum(pos.node->right);
-           } else {
-               Node *p = pos.node->parent;
-               Node *curr = pos.node;
-               while (p && curr == p->right) {
-                   curr = p;
-                   p = p->parent;
-               }
-               nextMin = p;
-           }
-       }
-
-       if (updateMax && count_size > 1) {
-           // Find predecessor of maxNode
-           if (pos.node->left) {
-               nextMax = maximum(pos.node->left);
-           } else {
-               Node *p = pos.node->parent;
-               Node *curr = pos.node;
-               while (p && curr == p->left) {
-                   curr = p;
-                   p = p->parent;
-               }
-               nextMax = p;
-           }
-       }
-
        deleteNode(pos.node);
        count_size--;
 
-       // Update caches
+       // Update caches - recompute if necessary
        if (count_size == 0) {
            minNode = maxNode = nullptr;
        } else {
-           if (updateMin) minNode = nextMin;
-           if (updateMax) maxNode = nextMax;
+           if (updateMin) minNode = minimum(root);
+           if (updateMax) maxNode = maximum(root);
        }
    }
 
