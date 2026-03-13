@@ -44,8 +44,8 @@ template<
 
    Node *root;
    Node *nil;  // sentinel node for end iterator
-   Node *minNode;  // cache for minimum node
-   Node *maxNode;  // cache for maximum node
+   mutable Node *minNode;  // cache for minimum node
+   mutable Node *maxNode;  // cache for maximum node
    size_t count_size;
    Compare comp;
 
@@ -625,11 +625,11 @@ template<
   * return a iterator to the beginning
     */
    iterator begin() {
-       return iterator(this, minNode);
+       return iterator(this, minNode ? minNode : nil);
    }
 
    const_iterator cbegin() const {
-       return const_iterator(this, minNode);
+       return const_iterator(this, minNode ? minNode : nil);
    }
 
    /**
