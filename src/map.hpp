@@ -18,12 +18,258 @@ template<
    class Compare = std::less <Key>
    > class map {
   public:
-   /**
-  * the internal type of data.
-  * it should have a default constructor, a copy constructor.
-  * You can use sjtu::map as value_type by typedef.
-    */
    typedef pair<const Key, T> value_type;
+
+  private:
+   enum Color { RED, BLACK };
+
+   struct Node {
+       value_type *data;
+       Node *left;
+       Node *right;
+       Node *parent;
+       Color color;
+
+       Node(const value_type &val, Node *p = nullptr)
+           : left(nullptr), right(nullptr), parent(p), color(RED) {
+           data = new value_type(val);
+       }
+
+       Node() : data(nullptr), left(nullptr), right(nullptr), parent(nullptr), color(BLACK) {}
+
+       ~Node() {
+           if (data) delete data;
+       }
+   };
+
+   Node *root;
+   Node *nil;  // sentinel node for end iterator
+   size_t count_size;
+   Compare comp;
+
+   void rotateLeft(Node *x) {
+       Node *y = x->right;
+       x->right = y->left;
+       if (y->left) y->left->parent = x;
+       y->parent = x->parent;
+       if (!x->parent) {
+           root = y;
+       } else if (x == x->parent->left) {
+           x->parent->left = y;
+       } else {
+           x->parent->right = y;
+       }
+       y->left = x;
+       x->parent = y;
+   }
+
+   void rotateRight(Node *x) {
+       Node *y = x->left;
+       x->left = y->right;
+       if (y->right) y->right->parent = x;
+       y->parent = x->parent;
+       if (!x->parent) {
+           root = y;
+       } else if (x == x->parent->right) {
+           x->parent->right = y;
+       } else {
+           x->parent->left = y;
+       }
+       y->right = x;
+       x->parent = y;
+   }
+
+   void insertFixup(Node *z) {
+       while (z->parent && z->parent->color == RED) {
+           if (z->parent == z->parent->parent->left) {
+               Node *y = z->parent->parent->right;
+               if (y && y->color == RED) {
+                   z->parent->color = BLACK;
+                   y->color = BLACK;
+                   z->parent->parent->color = RED;
+                   z = z->parent->parent;
+               } else {
+                   if (z == z->parent->right) {
+                       z = z->parent;
+                       rotateLeft(z);
+                   }
+                   z->parent->color = BLACK;
+                   z->parent->parent->color = RED;
+                   rotateRight(z->parent->parent);
+               }
+           } else {
+               Node *y = z->parent->parent->left;
+               if (y && y->color == RED) {
+                   z->parent->color = BLACK;
+                   y->color = BLACK;
+                   z->parent->parent->color = RED;
+                   z = z->parent->parent;
+               } else {
+                   if (z == z->parent->left) {
+                       z = z->parent;
+                       rotateRight(z);
+                   }
+                   z->parent->color = BLACK;
+                   z->parent->parent->color = RED;
+                   rotateLeft(z->parent->parent);
+               }
+           }
+       }
+       root->color = BLACK;
+   }
+
+   void transplant(Node *u, Node *v) {
+       if (!u->parent) {
+           root = v;
+       } else if (u == u->parent->left) {
+           u->parent->left = v;
+       } else {
+           u->parent->right = v;
+       }
+       if (v) v->parent = u->parent;
+   }
+
+   Node* minimum(Node *x) const {
+       if (!x) return nil;
+       while (x->left) x = x->left;
+       return x;
+   }
+
+   Node* maximum(Node *x) const {
+       if (!x) return nil;
+       while (x->right) x = x->right;
+       return x;
+   }
+
+   void deleteFixup(Node *x, Node *xParent) {
+       while (x != root && (!x || x->color == BLACK)) {
+           if (x == (xParent ? xParent->left : nullptr)) {
+               Node *w = xParent->right;
+               if (w && w->color == RED) {
+                   w->color = BLACK;
+                   xParent->color = RED;
+                   rotateLeft(xParent);
+                   w = xParent->right;
+               }
+               if ((!w->left || w->left->color == BLACK) &&
+                   (!w->right || w->right->color == BLACK)) {
+                   w->color = RED;
+                   x = xParent;
+                   xParent = x ? x->parent : nullptr;
+               } else {
+                   if (!w->right || w->right->color == BLACK) {
+                       if (w->left) w->left->color = BLACK;
+                       w->color = RED;
+                       rotateRight(w);
+                       w = xParent->right;
+                   }
+                   w->color = xParent->color;
+                   xParent->color = BLACK;
+                   if (w->right) w->right->color = BLACK;
+                   rotateLeft(xParent);
+                   x = root;
+               }
+           } else {
+               Node *w = xParent->left;
+               if (w && w->color == RED) {
+                   w->color = BLACK;
+                   xParent->color = RED;
+                   rotateRight(xParent);
+                   w = xParent->left;
+               }
+               if ((!w->right || w->right->color == BLACK) &&
+                   (!w->left || w->left->color == BLACK)) {
+                   w->color = RED;
+                   x = xParent;
+                   xParent = x ? x->parent : nullptr;
+               } else {
+                   if (!w->left || w->left->color == BLACK) {
+                       if (w->right) w->right->color = BLACK;
+                       w->color = RED;
+                       rotateLeft(w);
+                       w = xParent->left;
+                   }
+                   w->color = xParent->color;
+                   xParent->color = BLACK;
+                   if (w->left) w->left->color = BLACK;
+                   rotateRight(xParent);
+                   x = root;
+               }
+           }
+       }
+       if (x) x->color = BLACK;
+   }
+
+   void deleteNode(Node *z) {
+       Node *y = z;
+       Node *x;
+       Node *xParent;
+       Color y_original_color = y->color;
+
+       if (!z->left) {
+           x = z->right;
+           xParent = z->parent;
+           transplant(z, z->right);
+       } else if (!z->right) {
+           x = z->left;
+           xParent = z->parent;
+           transplant(z, z->left);
+       } else {
+           y = minimum(z->right);
+           y_original_color = y->color;
+           x = y->right;
+           xParent = y->parent;
+           if (y->parent == z) {
+               xParent = y;
+           } else {
+               transplant(y, y->right);
+               y->right = z->right;
+               y->right->parent = y;
+           }
+           transplant(z, y);
+           y->left = z->left;
+           y->left->parent = y;
+           y->color = z->color;
+       }
+
+       delete z;
+
+       if (y_original_color == BLACK) {
+           deleteFixup(x, xParent);
+       }
+   }
+
+   Node* copyTree(Node *node, Node *parent) {
+       if (!node) return nullptr;
+       Node *newNode = new Node(*(node->data), parent);
+       newNode->color = node->color;
+       newNode->left = copyTree(node->left, newNode);
+       newNode->right = copyTree(node->right, newNode);
+       return newNode;
+   }
+
+   void clearTree(Node *node) {
+       if (!node) return;
+       clearTree(node->left);
+       clearTree(node->right);
+       delete node;
+   }
+
+   Node* findNode(const Key &key) const {
+       Node *current = root;
+       while (current) {
+           if (comp(key, current->data->first)) {
+               current = current->left;
+           } else if (comp(current->data->first, key)) {
+               current = current->right;
+           } else {
+               return current;
+           }
+       }
+       return nullptr;
+   }
+
+  public:
    /**
   * see BidirectionalIterator at CppReference for help.
   *
@@ -33,155 +279,388 @@ template<
     */
    class const_iterator;
    class iterator {
+       friend class map;
+       friend class const_iterator;
       private:
-       /**
-    * TODO add data members
-    *   just add whatever you want.
-        */
+       map *mp;
+       Node *node;
+
+       iterator(map *m, Node *n) : mp(m), node(n) {}
+
       public:
-       iterator() {
-           // TODO
+       iterator() : mp(nullptr), node(nullptr) {}
+
+       iterator(const iterator &other) : mp(other.mp), node(other.node) {}
+
+       /**
+    * iter++
+        */
+       iterator operator++(int) {
+           if (!node || node == mp->nil) {
+               throw invalid_iterator();
+           }
+           iterator tmp = *this;
+           if (node->right) {
+               node = mp->minimum(node->right);
+           } else {
+               Node *p = node->parent;
+               while (p && node == p->right) {
+                   node = p;
+                   p = p->parent;
+               }
+               node = p ? p : mp->nil;
+           }
+           return tmp;
        }
 
-       iterator(const iterator &other) {
-           // TODO
+       /**
+    * ++iter
+        */
+       iterator &operator++() {
+           if (!node || node == mp->nil) {
+               throw invalid_iterator();
+           }
+           if (node->right) {
+               node = mp->minimum(node->right);
+           } else {
+               Node *p = node->parent;
+               while (p && node == p->right) {
+                   node = p;
+                   p = p->parent;
+               }
+               node = p ? p : mp->nil;
+           }
+           return *this;
        }
 
        /**
-    * TODO iter++
+    * iter--
         */
-       iterator operator++(int) {}
+       iterator operator--(int) {
+           iterator tmp = *this;
+           if (node == mp->nil) {
+               node = mp->maximum(mp->root);
+               if (!node) throw invalid_iterator();
+           } else if (!node) {
+               throw invalid_iterator();
+           } else {
+               if (node->left) {
+                   node = mp->maximum(node->left);
+               } else {
+                   Node *p = node->parent;
+                   while (p && node == p->left) {
+                       node = p;
+                       p = p->parent;
+                   }
+                   if (!p) throw invalid_iterator();
+                   node = p;
+               }
+           }
+           return tmp;
+       }
 
        /**
-    * TODO ++iter
+    * --iter
         */
-       iterator &operator++() {}
-
-       /**
-    * TODO iter--
-        */
-       iterator operator--(int) {}
-
-       /**
-    * TODO --iter
-        */
-       iterator &operator--() {}
+       iterator &operator--() {
+           if (node == mp->nil) {
+               node = mp->maximum(mp->root);
+               if (!node) throw invalid_iterator();
+           } else if (!node) {
+               throw invalid_iterator();
+           } else {
+               if (node->left) {
+                   node = mp->maximum(node->left);
+               } else {
+                   Node *p = node->parent;
+                   while (p && node == p->left) {
+                       node = p;
+                       p = p->parent;
+                   }
+                   if (!p) throw invalid_iterator();
+                   node = p;
+               }
+           }
+           return *this;
+       }
 
        /**
     * a operator to check whether two iterators are same (pointing to the same memory).
         */
-       value_type &operator*() const {}
+       value_type &operator*() const {
+           if (!node || node == mp->nil) {
+               throw invalid_iterator();
+           }
+           return *(node->data);
+       }
 
-       bool operator==(const iterator &rhs) const {}
+       bool operator==(const iterator &rhs) const {
+           return mp == rhs.mp && node == rhs.node;
+       }
 
-       bool operator==(const const_iterator &rhs) const {}
+       bool operator==(const const_iterator &rhs) const {
+           return mp == rhs.mp && node == rhs.node;
+       }
 
        /**
     * some other operator for iterator.
         */
-       bool operator!=(const iterator &rhs) const {}
+       bool operator!=(const iterator &rhs) const {
+           return !(*this == rhs);
+       }
 
-       bool operator!=(const const_iterator &rhs) const {}
+       bool operator!=(const const_iterator &rhs) const {
+           return !(*this == rhs);
+       }
 
        /**
     * for the support of it->first.
     * See <http://kelvinh.github.io/blog/2013/11/20/overloading-of-member-access-operator-dash-greater-than-symbol-in-cpp/> for help.
         */
-       value_type *operator->() const
-           noexcept {}
+       value_type *operator->() const noexcept {
+           return node->data;
+       }
    };
+
    class const_iterator {
-       // it should has similar member method as iterator.
-       //  and it should be able to construct from an iterator.
+       friend class map;
       private:
-       // data members.
+       const map *mp;
+       Node *node;
+
+       const_iterator(const map *m, Node *n) : mp(m), node(n) {}
+
       public:
-       const_iterator() {
-           // TODO
+       const_iterator() : mp(nullptr), node(nullptr) {}
+
+       const_iterator(const const_iterator &other) : mp(other.mp), node(other.node) {}
+
+       const_iterator(const iterator &other) : mp(other.mp), node(other.node) {}
+
+       const_iterator operator++(int) {
+           if (!node || node == mp->nil) {
+               throw invalid_iterator();
+           }
+           const_iterator tmp = *this;
+           if (node->right) {
+               node = mp->minimum(node->right);
+           } else {
+               Node *p = node->parent;
+               while (p && node == p->right) {
+                   node = p;
+                   p = p->parent;
+               }
+               node = p ? p : mp->nil;
+           }
+           return tmp;
        }
 
-       const_iterator(const const_iterator &other) {
-           // TODO
+       const_iterator &operator++() {
+           if (!node || node == mp->nil) {
+               throw invalid_iterator();
+           }
+           if (node->right) {
+               node = mp->minimum(node->right);
+           } else {
+               Node *p = node->parent;
+               while (p && node == p->right) {
+                   node = p;
+                   p = p->parent;
+               }
+               node = p ? p : mp->nil;
+           }
+           return *this;
        }
 
-       const_iterator(const iterator &other) {
-           // TODO
+       const_iterator operator--(int) {
+           const_iterator tmp = *this;
+           if (node == mp->nil) {
+               node = mp->maximum(mp->root);
+               if (!node) throw invalid_iterator();
+           } else if (!node) {
+               throw invalid_iterator();
+           } else {
+               if (node->left) {
+                   node = mp->maximum(node->left);
+               } else {
+                   Node *p = node->parent;
+                   while (p && node == p->left) {
+                       node = p;
+                       p = p->parent;
+                   }
+                   if (!p) throw invalid_iterator();
+                   node = p;
+               }
+           }
+           return tmp;
        }
-       // And other methods in iterator.
-       // And other methods in iterator.
-       // And other methods in iterator.
+
+       const_iterator &operator--() {
+           if (node == mp->nil) {
+               node = mp->maximum(mp->root);
+               if (!node) throw invalid_iterator();
+           } else if (!node) {
+               throw invalid_iterator();
+           } else {
+               if (node->left) {
+                   node = mp->maximum(node->left);
+               } else {
+                   Node *p = node->parent;
+                   while (p && node == p->left) {
+                       node = p;
+                       p = p->parent;
+                   }
+                   if (!p) throw invalid_iterator();
+                   node = p;
+               }
+           }
+           return *this;
+       }
+
+       const value_type &operator*() const {
+           if (!node || node == mp->nil) {
+               throw invalid_iterator();
+           }
+           return *(node->data);
+       }
+
+       bool operator==(const iterator &rhs) const {
+           return mp == rhs.mp && node == rhs.node;
+       }
+
+       bool operator==(const const_iterator &rhs) const {
+           return mp == rhs.mp && node == rhs.node;
+       }
+
+       bool operator!=(const iterator &rhs) const {
+           return !(*this == rhs);
+       }
+
+       bool operator!=(const const_iterator &rhs) const {
+           return !(*this == rhs);
+       }
+
+       const value_type *operator->() const noexcept {
+           return node->data;
+       }
    };
 
    /**
-  * TODO two constructors
+  * two constructors
     */
-   map() {}
+   map() : root(nullptr), count_size(0) {
+       nil = new Node();
+   }
 
-   map(const map &other) {}
+   map(const map &other) : root(nullptr), count_size(other.count_size) {
+       nil = new Node();
+       root = copyTree(other.root, nullptr);
+   }
 
    /**
-  * TODO assignment operator
+  * assignment operator
     */
-   map &operator=(const map &other) {}
+   map &operator=(const map &other) {
+       if (this == &other) return *this;
+       clearTree(root);
+       root = copyTree(other.root, nullptr);
+       count_size = other.count_size;
+       return *this;
+   }
 
    /**
-  * TODO Destructors
+  * Destructors
     */
-   ~map() {}
+   ~map() {
+       clearTree(root);
+       delete nil;
+   }
 
    /**
-  * TODO
   * access specified element with bounds checking
   * Returns a reference to the mapped value of the element with key equivalent to key.
   * If no such element exists, an exception of type `index_out_of_bound'
     */
-   T &at(const Key &key) {}
+   T &at(const Key &key) {
+       Node *node = findNode(key);
+       if (!node) throw index_out_of_bound();
+       return node->data->second;
+   }
 
-   const T &at(const Key &key) const {}
+   const T &at(const Key &key) const {
+       Node *node = findNode(key);
+       if (!node) throw index_out_of_bound();
+       return node->data->second;
+   }
 
    /**
-  * TODO
   * access specified element
   * Returns a reference to the value that is mapped to a key equivalent to key,
   *   performing an insertion if such key does not already exist.
     */
-   T &operator[](const Key &key) {}
+   T &operator[](const Key &key) {
+       Node *node = findNode(key);
+       if (node) return node->data->second;
+
+       auto result = insert(value_type(key, T()));
+       return result.first.node->data->second;
+   }
 
    /**
   * behave like at() throw index_out_of_bound if such key does not exist.
     */
-   const T &operator[](const Key &key) const {}
+   const T &operator[](const Key &key) const {
+       Node *node = findNode(key);
+       if (!node) throw index_out_of_bound();
+       return node->data->second;
+   }
 
    /**
   * return a iterator to the beginning
     */
-   iterator begin() {}
+   iterator begin() {
+       return iterator(this, minimum(root));
+   }
 
-   const_iterator cbegin() const {}
+   const_iterator cbegin() const {
+       return const_iterator(this, minimum(root));
+   }
 
    /**
   * return a iterator to the end
   * in fact, it returns past-the-end.
     */
-   iterator end() {}
+   iterator end() {
+       return iterator(this, nil);
+   }
 
-   const_iterator cend() const {}
+   const_iterator cend() const {
+       return const_iterator(this, nil);
+   }
 
    /**
   * checks whether the container is empty
   * return true if empty, otherwise false.
     */
-   bool empty() const {}
+   bool empty() const {
+       return count_size == 0;
+   }
 
    /**
   * returns the number of elements.
     */
-   size_t size() const {}
+   size_t size() const {
+       return count_size;
+   }
 
    /**
   * clears the contents
     */
-   void clear() {}
+   void clear() {
+       clearTree(root);
+       root = nullptr;
+       count_size = 0;
+   }
 
    /**
   * insert an element.
@@ -189,14 +668,54 @@ template<
   *   the iterator to the new element (or the element that prevented the insertion),
   *   the second one is true if insert successfully, or false.
     */
-   pair<iterator, bool> insert(const value_type &value) {}
+   pair<iterator, bool> insert(const value_type &value) {
+       if (!root) {
+           root = new Node(value);
+           root->color = BLACK;
+           count_size = 1;
+           return pair<iterator, bool>(iterator(this, root), true);
+       }
+
+       Node *current = root;
+       Node *parent = nullptr;
+
+       while (current) {
+           parent = current;
+           if (comp(value.first, current->data->first)) {
+               current = current->left;
+           } else if (comp(current->data->first, value.first)) {
+               current = current->right;
+           } else {
+               return pair<iterator, bool>(iterator(this, current), false);
+           }
+       }
+
+       Node *newNode = new Node(value, parent);
+       if (comp(value.first, parent->data->first)) {
+           parent->left = newNode;
+       } else {
+           parent->right = newNode;
+       }
+
+       count_size++;
+       insertFixup(newNode);
+
+       return pair<iterator, bool>(iterator(this, newNode), true);
+   }
 
    /**
   * erase the element at pos.
   *
   * throw if pos pointed to a bad element (pos == this->end() || pos points an element out of this)
     */
-   void erase(iterator pos) {}
+   void erase(iterator pos) {
+       if (pos.mp != this || !pos.node || pos.node == nil) {
+           throw invalid_iterator();
+       }
+
+       deleteNode(pos.node);
+       count_size--;
+   }
 
    /**
   * Returns the number of elements with key
@@ -205,7 +724,9 @@ template<
   *     since this container does not allow duplicates.
   * The default method of check the equivalence is !(a < b || b > a)
     */
-   size_t count(const Key &key) const {}
+   size_t count(const Key &key) const {
+       return findNode(key) ? 1 : 0;
+   }
 
    /**
   * Finds an element with key equivalent to key.
@@ -213,9 +734,15 @@ template<
   * Iterator to an element with key equivalent to key.
   *   If no such element is found, past-the-end (see end()) iterator is returned.
     */
-   iterator find(const Key &key) {}
+   iterator find(const Key &key) {
+       Node *node = findNode(key);
+       return node ? iterator(this, node) : end();
+   }
 
-   const_iterator find(const Key &key) const {}
+   const_iterator find(const Key &key) const {
+       Node *node = findNode(key);
+       return node ? const_iterator(this, node) : cend();
+   }
 };
 
 }
